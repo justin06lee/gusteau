@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300" width="600" height="300" role="img" aria-labelledby="t">
+  <title id="t">gusteau</title>
+  <!-- A chef's toque on a tomato-red sun, a tasting spoon held up to it:
+       the taste is checked before the dish goes out. -->
+  <rect x="8" y="8" width="584" height="284" rx="26" fill="#f6eee1"/>
+  <circle cx="166" cy="150" r="104" fill="#e0533a"/>
+  <!-- toque -->
+  <g fill="#fffaf2">
+    <circle cx="136" cy="136" r="30"/>
+    <circle cx="166" cy="114" r="36"/>
+    <circle cx="196" cy="136" r="30"/>
+    <rect x="124" y="128" width="84" height="44"/>
+    <rect x="126" y="168" width="80" height="40" rx="5"/>
+  </g>
+  <rect x="126" y="166" width="80" height="6" fill="#eadbc5"/>
+  <g stroke="#eadbc5" stroke-width="3" stroke-linecap="round">
+    <path d="M144 180 V198 M160 180 V198 M176 180 V198 M192 180 V198"/>
+  </g>
+  <!-- tasting spoon, held up to the hat -->
+  <g transform="rotate(-14 254 170)">
+    <rect x="249.5" y="118" width="9" height="108" rx="4.5" fill="#2b211c"/>
+    <ellipse cx="254" cy="102" rx="16" ry="21" fill="#2b211c"/>
+    <ellipse cx="254" cy="99" rx="9.5" ry="12.5" fill="#f2a33a"/>
+  </g>
+  <!-- wordmark -->
+  <text x="318" y="152" font-family="Georgia, 'Times New Roman', serif" font-size="66" fill="#2b211c" letter-spacing="1">gusteau</text>
+  <text x="321" y="188" font-family="Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#8a6c55">anyone can cook.</text>
+</svg>

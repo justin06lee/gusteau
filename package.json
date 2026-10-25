@@ -1,0 +1,23 @@
+{
+  "name": "gusteau",
+  "version": "0.1.0",
+  "description": "A taste layer for AI agents and harnesses.",
+  "type": "module",
+  "bin": {
+    "gusteau": "src/cli.ts"
+  },
+  "files": ["src", "primers", "templates", "README.md", "SPEC.md"],
+  "scripts": {
+    "build": "bun build src/cli.ts --compile --outfile dist/gusteau",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "bun-types": "^1.4.4",
+    "typescript": "^7.0.2"
+  }
+}
