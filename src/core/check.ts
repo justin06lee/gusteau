@@ -15,14 +15,16 @@ const kindOf = (prop: string): Kind | null =>
   : /^(padding|margin|gap|spacing|row-?gap|column-?gap|p[xytrbl]?|m[xytrbl]?|space-[xy])|padding|margins?$/i.test(prop) ? "space"
   : null;
 
-/** Numbers and colors anywhere in a tokens object. */
-export function flattenTokens(obj: unknown, out = { numbers: new Set<number>([0, 1]), colors: new Set<string>() }) {
-  if (typeof obj === "number") out.numbers.add(obj);
+/** Numbers and colors anywhere in a tokens object, with the first path each number sits at. */
+export function flattenTokens(obj: unknown, out = { numbers: new Set<number>([0, 1]), colors: new Set<string>(), paths: new Map<number, string[]>() }, path = "") {
+  const num = (n: number) => (out.numbers.add(n), out.paths.set(n, [...(out.paths.get(n) ?? []), path]));
+  if (typeof obj === "number") num(obj);
   else if (typeof obj === "string") {
     const hex = obj.startsWith("#") && normalizeHex(obj);
     if (hex) out.colors.add(hex);
-    for (const m of obj.matchAll(/(\d+(?:\.\d+)?)px/g)) out.numbers.add(+m[1]);
-  } else if (obj && typeof obj === "object") for (const v of Object.values(obj)) flattenTokens(v, out);
+    for (const m of obj.matchAll(/(\d+(?:\.\d+)?)px/g)) num(+m[1]!);
+  } else if (obj && typeof obj === "object")
+    for (const [k, v] of Object.entries(obj)) if (k !== "default") flattenTokens(v, out, path ? `${path}.${k}` : k);
   return out;
 }
 
@@ -48,17 +50,26 @@ const PATTERNS: { ext: RegExp; re: RegExp }[] = [
 ];
 const HEX = /(?<=["'`:\s(,=])#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
 
+const KIND_PATH: Record<Kind, RegExp> = { color: /color/i, radius: /radius|corner|round/i, type: /type|font|text|leading/i, space: /space|gap|pad|margin|inset/i };
+/** The token path for a value, preferring one named for the property's kind. */
+const pathFor = (ps: string[], kind: Kind) => ps.find((p) => KIND_PATH[kind].test(p)) ?? ps[0];
+
 const nearest = (n: number, set: Set<number>) => [...set].filter((v) => v > 1).reduce((a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a), Infinity);
 
-/** Hardcoded sizes and colors that aren't in the tokens. */
+/**
+ * Hardcoded sizes and colors. Values that aren't tokens rank by kind; a literal that
+ * copies a token's value ranks lowest (severity 0), since it drifts when the token changes.
+ * Lines that define a value (QML properties, CSS custom properties) can repeat a token freely.
+ */
 export function lint(root: string, tokens: unknown, skip: string[] = []): Failure[] {
-  const { numbers, colors } = flattenTokens(tokens);
+  const { numbers, colors, paths } = flattenTokens(tokens);
   const out: Failure[] = [];
   for (const file of walk(root).filter((f) => EXT.test(f) && !skip.includes(resolve(f)) && !/\.(test|spec|d)\.[jt]sx?$/.test(f))) {
     const lines = readText(file)!.split("\n");
     const rel = relative(root, file);
     lines.forEach((line, i) => {
       if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+      const defines = /\bproperty\s+\w+\s+\w+\s*:|^\s*--[\w-]+\s*:/.test(line);
       const where = `${rel}:${i + 1}`;
       for (const { ext, re } of PATTERNS) {
         if (!ext.test(file)) continue;
@@ -68,7 +79,10 @@ export function lint(root: string, tokens: unknown, skip: string[] = []): Failur
           for (const v of m[2].matchAll(/(-?\d+(?:\.\d+)?)(px|rem)?/g)) {
             if (/var\(|calc\(|%|\bem\b|vh|vw|auto/.test(m[2]) && !v[2]) continue;
             const n = Math.abs(+v[1] * (v[2] === "rem" ? 16 : 1));
-            if (numbers.has(n)) continue;
+            if (numbers.has(n)) {
+              if (n > 1 && !defines) out.push({ severity: 0, rule: "values.tokens", where, message: `${m[1]} ${v[0]} copies a token value`, fix: `reference ${pathFor(paths.get(n)!, kind)}` });
+              continue;
+            }
             const near = nearest(n, numbers);
             out.push({ severity: SEVERITY[kind], rule: "values.tokens", where, message: `${m[1]} ${v[0]} isn't a token`, fix: Number.isFinite(near) ? `nearest token is ${near}` : undefined });
           }

@@ -74,10 +74,12 @@ describe("check", () => {
     const root = tmp();
     put(root, "ui/Card.qml", "Rectangle {\n  radius: 9\n  anchors.margins: 8\n  color: \"#3366ff\"\n}\n");
     put(root, "web/app.css", ".a { color: #abc; padding: 12px; margin: 13px; }\n");
-    const where = lint(root, tokens).map((f) => f.where);
-    expect(where).toContain("ui/Card.qml:2");
-    expect(where).toContain("web/app.css:1");
-    expect(where.filter((w) => w.startsWith("ui/Card.qml"))).toEqual(["ui/Card.qml:2"]);
+    const found = lint(root, tokens);
+    const off = found.filter((f) => f.severity > 0).map((f) => f.where);
+    expect(off).toContain("ui/Card.qml:2");
+    expect(off).toContain("web/app.css:1");
+    expect(off.filter((w) => w.startsWith("ui/Card.qml"))).toEqual(["ui/Card.qml:2"]);
+    expect(found.find((f) => f.where === "ui/Card.qml:3")).toMatchObject({ severity: 0, fix: "reference space.1" });
   });
 
   test("a clean project passes and reports coverage", async () => {

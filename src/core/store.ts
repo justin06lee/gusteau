@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -23,15 +23,15 @@ export function readJson<T>(path: string, fallback: T): T {
 }
 export const writeJson = (path: string, data: unknown) => writeText(path, JSON.stringify(data, null, 2) + "\n");
 
-/** Every file under `dir`, skipping build output and dependencies. */
+/** Every regular file under `dir`, skipping build output, dependencies and symlinks. */
 export function walk(dir: string, skip = SKIP): string[] {
   if (!existsSync(dir)) return [];
   const out: string[] = [];
-  for (const name of readdirSync(dir)) {
-    if (skip.has(name)) continue;
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) out.push(...walk(path, skip));
-    else out.push(path);
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (skip.has(e.name)) continue;
+    const path = join(dir, e.name);
+    if (e.isDirectory()) out.push(...walk(path, skip));
+    else if (e.isFile()) out.push(path);
   }
   return out;
 }
