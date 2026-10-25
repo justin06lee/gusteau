@@ -17,13 +17,13 @@ It is a CLI and an MCP server, so it plugs into any harness, coding agent or ass
 
 ## Install
 
-Needs [bun](https://bun.sh).
+Needs [bun](https://bun.sh) 1.1 or later.
 
 ```sh
-make
+bun add -g gusteau
 ```
 
-This builds a single binary at `dist/gusteau` and copies it to `~/.local/bin`. `make update` rebuilds and replaces it. To run from source instead, use `bun src/cli.ts <command>`.
+Or from a clone, `make` builds a single binary at `dist/gusteau` and copies it to `~/.local/bin`. `make update` rebuilds and replaces it. To run from source, use `bun src/cli.ts <command>`.
 
 ## Two layers
 

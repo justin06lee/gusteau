@@ -2,11 +2,40 @@
   "name": "gusteau",
   "version": "0.1.0",
   "description": "A taste layer for AI agents and harnesses.",
+  "author": "justin06lee",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/justin06lee/gusteau.git"
+  },
+  "homepage": "https://github.com/justin06lee/gusteau#readme",
+  "keywords": [
+    "design",
+    "design-tokens",
+    "design-system",
+    "ui",
+    "taste",
+    "agents",
+    "coding-agent",
+    "mcp",
+    "claude-code",
+    "lint"
+  ],
+  "engines": {
+    "bun": ">=1.1"
+  },
   "type": "module",
   "bin": {
     "gusteau": "src/cli.ts"
   },
-  "files": ["src", "primers", "templates", "README.md", "SPEC.md"],
+  "files": [
+    "src",
+    "primers",
+    "templates",
+    "README.md",
+    "SPEC.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "bun build src/cli.ts --compile --outfile dist/gusteau",
     "test": "bun test",
