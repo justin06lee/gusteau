@@ -46,7 +46,7 @@ gusteau check
 
 `brief` prints what an agent should read before UI work: the goal, the rules, your preferences, the project's tokens and decisions, the library, and a few quick checks.
 
-`check` scans the code for values that aren't tokens: hex colors, sizes off the scale, and literals that copy a token instead of referencing it. It reads CSS, JS/TS/JSX/TSX, QML, HTML, Vue and Svelte. It also checks the component library for contradictions. Failures come out ranked by severity, with a suggested fix, and the command exits 1 until everything passes, so an agent can loop on it.
+`check` scans the code for values that aren't tokens: colors (hex, `rgb()`/`hsl()`, named colors, Tailwind palette classes), sizes off the scale, and literals that copy a token instead of referencing it. It reads CSS, JS/TS/JSX/TSX, QML, HTML, Vue and Svelte. It also checks the component library for contradictions. Failures come out ranked by severity, with a suggested fix, and the command exits 1 until everything passes, so an agent can loop on it.
 
 ```sh
 gusteau check --root ../app --tokens ../app/design/tokens.ts --limit 50

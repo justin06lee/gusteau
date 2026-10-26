@@ -1,5 +1,5 @@
 import { relative, resolve } from "node:path";
-import { normalizeHex } from "./color";
+import { hslToHex, normalizeHex } from "./color";
 import { componentFailures, loadComponents } from "./components";
 import { loadRules, type Rule } from "./rules";
 import { readText, walk } from "./store";
@@ -48,7 +48,32 @@ const PATTERNS: { ext: RegExp; re: RegExp }[] = [
   // QML literals: `radius: 9`, `font.pixelSize: 14`, `anchors.margins: 8`
   { ext: /\.qml$/, re: /\b(radius|spacing|padding|\w+Padding|(?:anchors\.)?\w*[mM]argins?|font\.pixelSize|font\.pointSize)\s*:\s*(-?\d+(?:\.\d+)?)\s*(?=[;\n}]|$)/g },
 ];
-const HEX = /(?<=["'`:\s(,=])#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
+const HEX = /(?<=["'`:\s(,=\[])#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
+// `rgb(255 0 170)`, `hsl(280, 100%, 60%)`; translucent ones (alpha < 1) are shadows and overlays, left alone
+const COLOR_FN = /\b(rgba?|hsla?)\(\s*(-?[\d.]+)(?:deg)?[\s,]+([\d.]+)%?[\s,]+([\d.]+)%?\s*(?:[,/]\s*([\d.]+)(%)?)?\s*\)/g;
+// a color-bearing declaration (CSS or style object) whose value may hold named colors
+const COLOR_PROP = /(?<![\w-])([\w-]*(?:color|background|border|outline|fill|stroke|shadow)[\w-]*)\s*:\s*([^;{}\n]+)/gi;
+const NAMED = new Set("aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen".split(" "));
+const NAMED_HEX: Record<string, string> = { white: "#ffffff", black: "#000000" };
+// tailwind palette classes: `bg-pink-500`, `from-indigo-500`; the palette is never the project's tokens
+const TW_COLOR = /(?<![\w-])(?:bg|text|border(?:-[xytrbl])?|from|via|to|ring|fill|stroke|outline|decoration|divide|shadow|accent|caret|placeholder)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)\b/g;
+
+/** Colors on a line written as functions, names or tailwind classes, as [text, hex or null]. */
+function colorLiterals(line: string, file: string): [string, string | null][] {
+  const out: [string, string | null][] = [];
+  for (const m of line.matchAll(COLOR_FN)) {
+    const alpha = m[5] === undefined ? 1 : +m[5] / (m[6] ? 100 : 1);
+    if (alpha < 1) continue;
+    const [a, b, c] = [+m[2]!, +m[3]!, +m[4]!];
+    out.push([m[0], m[1]!.startsWith("rgb") ? "#" + [a, b, c].map((x) => Math.round(Math.min(255, x)).toString(16).padStart(2, "0")).join("") : hslToHex(((a % 360) + 360) % 360, b, c)]);
+  }
+  if (/\.(css|scss|sass|less|html|vue|svelte|astro|jsx|tsx|js|ts)$/.test(file))
+    for (const m of line.matchAll(COLOR_PROP))
+      for (const w of m[2]!.replace(/\$\{[^}]*\}/g, "").matchAll(/(?<![\w.$-])[a-z]+(?![\w.(-])/gi))
+        if (NAMED.has(w[0].toLowerCase())) out.push([w[0], NAMED_HEX[w[0].toLowerCase()] ?? null]);
+  if (/\.(html|jsx|tsx|js|ts|vue|svelte|astro)$/.test(file)) for (const m of line.matchAll(TW_COLOR)) out.push([m[0], null]);
+  return out;
+}
 
 const KIND_PATH: Record<Kind, RegExp> = { color: /color/i, radius: /radius|corner|round/i, type: /type|font|text|leading/i, space: /space|gap|pad|margin|inset/i };
 /** The token path for a value, preferring one named for the property's kind. */
@@ -92,6 +117,8 @@ export function lint(root: string, tokens: unknown, skip: string[] = []): Failur
         const hex = normalizeHex(m[0]);
         if (hex && !colors.has(hex)) out.push({ severity: 3, rule: "values.tokens", where, message: `color ${m[0]} isn't a token` });
       }
+      for (const [text, hex] of colorLiterals(line, file))
+        if (!hex || !colors.has(hex)) out.push({ severity: 3, rule: "values.tokens", where, message: `color ${text} isn't a token` });
     });
   }
   return out;

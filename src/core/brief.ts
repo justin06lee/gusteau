@@ -23,6 +23,17 @@ export function summarizeTokens(t: Tokens): string {
   ].join("; ");
 }
 
+/** Quick checks that say again what a rule already says. */
+const RESTATES: Record<string, RegExp> = {
+  "type.families": /fonts or fewer/i,
+  "type.body": /body text big enough/i,
+  "type.measure": /lines not too long/i,
+  "color.contrast": /contrast|easy to read on its background|value difference/i,
+  "color.accent": /accent color/i,
+  "ux.goal": /main goal/i,
+  "ux.feedback": /every click/i,
+};
+
 const prefLine = (p: Pref) => `- ${p.says}${p.why ? ` (${p.why})` : ""}${p.strength === "hard" ? " [hard]" : ""}`;
 
 /** The compact context an agent reads at task time. Only what applies here, nothing about elsewhere. */
@@ -38,7 +49,9 @@ export function compileBrief(root = process.cwd()): string {
 
   const goal = section(design, "Goal");
   add("Goal", goal ? [goal] : []);
-  add("Rules", loadRules().map((r) => `- ${r.says}`));
+  const rules = loadRules();
+  const restated = rules.map((r) => RESTATES[r.id]).filter((re): re is RegExp => !!re);
+  add("Rules", rules.map((r) => `- ${r.says}`));
   add("Taste", global.map(prefLine));
   add("This project", [
     ...(tokens ? [`- Tokens in .gusteau/tokens.json: ${summarizeTokens(tokens)}. Every size, color and duration comes from there.`] : []),
@@ -49,7 +62,7 @@ export function compileBrief(root = process.cwd()): string {
       return names.length ? [`- ${l}s: ${names.join(", ")}`] : [];
     }),
   ]);
-  add("Before calling it done", quickChecks().map((l) => `- ${l}`));
+  add("Before calling it done", quickChecks().filter((l) => !restated.some((re) => re.test(l))).map((l) => `- ${l}`));
   add("Tools", [
     "- `gusteau check` lists what's off; fix the top item and run it again until it passes.",
     "- When the request names another company's or product's look, `gusteau ref <name>` returns its saved sheet; if there is none, research that design and save one with `gusteau ref save <name> <file>` (`gusteau ref template` prints the outline).",
