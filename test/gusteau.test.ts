@@ -85,6 +85,13 @@ describe("check", () => {
     expect(found.find((f) => f.where === "ui/Card.qml:3")).toMatchObject({ severity: 0, fix: "reference space.1" });
   });
 
+  test("the nearest token comes from the property's own scale", () => {
+    const root = tmp();
+    put(root, "web/a.css", ".a { border-radius: 11px; padding: 7px; }\n");
+    const fixes = lint(root, { space: [4, 8, 12], radius: { sm: 4, lg: 16 }, type: { scale: [10, 13] } }).map((f) => f.fix);
+    expect(fixes).toEqual(["nearest token is 16", "nearest token is 8"]);
+  });
+
   test("lint flags color functions, named colors and tailwind palette classes", () => {
     const root = tmp();
     put(root, "web/a.css", ".a { color: tomato; background: rgb(51, 102, 255); border: 1px solid rgb(255 0 170); box-shadow: 0 1px 2px rgba(0,0,0,.1); fill: currentColor; }\n");
