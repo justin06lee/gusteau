@@ -79,7 +79,12 @@ const KIND_PATH: Record<Kind, RegExp> = { color: /color/i, radius: /radius|corne
 /** The token path for a value, preferring one named for the property's kind. */
 const pathFor = (ps: string[], kind: Kind) => ps.find((p) => KIND_PATH[kind].test(p)) ?? ps[0];
 
-const nearest = (n: number, set: Set<number>) => [...set].filter((v) => v > 1).reduce((a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a), Infinity);
+/** The closest token to n, from the property's own scale when the tokens have one. */
+function nearest(n: number, kind: Kind, set: Set<number>, paths: Map<number, string[]>) {
+  const all = [...set].filter((v) => v > 1);
+  const own = all.filter((v) => paths.get(v)?.some((p) => KIND_PATH[kind].test(p)));
+  return (own.length ? own : all).reduce((a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a), Infinity);
+}
 
 /**
  * Hardcoded sizes and colors. Values that aren't tokens rank by kind; a literal that
@@ -108,7 +113,7 @@ export function lint(root: string, tokens: unknown, skip: string[] = []): Failur
               if (n > 1 && !defines) out.push({ severity: 0, rule: "values.tokens", where, message: `${m[1]} ${v[0]} copies a token value`, fix: `reference ${pathFor(paths.get(n)!, kind)}` });
               continue;
             }
-            const near = nearest(n, numbers);
+            const near = nearest(n, kind, numbers, paths);
             out.push({ severity: SEVERITY[kind], rule: "values.tokens", where, message: `${m[1]} ${v[0]} isn't a token`, fix: Number.isFinite(near) ? `nearest token is ${near}` : undefined });
           }
         }
