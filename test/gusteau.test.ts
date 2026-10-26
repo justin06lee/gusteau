@@ -61,9 +61,12 @@ describe("brief", () => {
     for (const absent of ["roastledger", "coffee", "Acme", "history"]) expect(brief).not.toContain(absent);
   });
 
-  test("includes the primers' quick checks", () => {
+  test("includes the primers' quick checks, minus those a rule already says", () => {
     expect(quickChecks()).toContain("Two fonts or fewer?");
-    expect(compileBrief(tmp())).toContain("Is the main goal of the page obvious?");
+    const brief = compileBrief(tmp());
+    expect(brief).toContain("Are related things grouped together? (proximity)");
+    expect(brief).toContain("Each screen serves one main goal");
+    for (const said of ["Two fonts or fewer?", "Is the main goal of the page obvious?", "Strong contrast between text and background?"]) expect(brief).not.toContain(said);
   });
 });
 
