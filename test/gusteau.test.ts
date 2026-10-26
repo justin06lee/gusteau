@@ -82,6 +82,16 @@ describe("check", () => {
     expect(found.find((f) => f.where === "ui/Card.qml:3")).toMatchObject({ severity: 0, fix: "reference space.1" });
   });
 
+  test("lint flags color functions, named colors and tailwind palette classes", () => {
+    const root = tmp();
+    put(root, "web/a.css", ".a { color: tomato; background: rgb(51, 102, 255); border: 1px solid rgb(255 0 170); box-shadow: 0 1px 2px rgba(0,0,0,.1); fill: currentColor; }\n");
+    put(root, "web/B.tsx", "export const B = () => <div className=\"bg-pink-500 p-4 bg-[#123456]\" style={{ color: \"gold\", background: t.color.accent }} />;\n");
+    const msgs = lint(root, tokens).map((f) => `${f.where} ${f.message}`);
+    for (const hit of ["web/a.css:1 color tomato", "web/a.css:1 color rgb(255 0 170)", "web/B.tsx:1 color bg-pink-500", "web/B.tsx:1 color gold", "web/B.tsx:1 color #123456"])
+      expect(msgs.some((m) => m.startsWith(hit))).toBe(true);
+    expect(msgs.some((m) => /rgb\(51|rgba|currentColor|accent/.test(m))).toBe(false);
+  });
+
   test("a clean project passes and reports coverage", async () => {
     const root = tmp();
     initProject(root, "a notes app");
