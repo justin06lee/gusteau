@@ -43,11 +43,11 @@ gusteau check
 gusteau taste index.html
 ```
 
-`init` writes `.gusteau/` for the project: tokens (color, type, spacing, radius), a `DESIGN.md` with the goal and principles, and an empty decision log and library. Each project gets its own values. A new project doesn't reuse an earlier one's accent or fonts.
+`init` writes `.gusteau/` for the project: tokens (color, type, spacing, radius), a `DESIGN.md` with the goal and principles, a decision log and an empty library. Each project gets its own values. A new project doesn't reuse an earlier one's accent or fonts. Fonts are picked for what the request and your global preferences ask for ("calm", "editorial", "a bakery"), and the reason goes into `DESIGN.md` and a proposed decision you can accept or change. Asking for room ("spacious", "breathing room", a landing page) adds wider spacing steps (96, 128) and two larger type sizes. "A recipe box called Mise" names the project Mise; otherwise it takes the folder's name.
 
 `brief` prints what an agent should read before UI work: the goal, the rules, your preferences, the project's tokens and decisions, the library, and a few quick checks.
 
-`check` scans the code for values that aren't tokens: colors (hex, `rgb()`/`hsl()`, named colors, Tailwind palette classes), sizes off the scale, and literals that copy a token instead of referencing it. It reads CSS, JS/TS/JSX/TSX, QML, HTML, Vue and Svelte. It also checks the component library for contradictions. Failures come out ranked by severity, with a suggested fix, and the command exits 1 until everything passes, so an agent can loop on it.
+`check` scans the code for values that aren't tokens: colors (hex, `rgb()`/`hsl()`, named colors, Tailwind palette classes), sizes off the scale, and literals that copy a token instead of referencing it. It reads CSS, JS/TS/JSX/TSX, QML, HTML, Vue and Svelte. It also checks the component library for contradictions. Failures come out ranked by severity, with a suggested fix, and the command exits 1 until everything passes, so an agent can loop on it. It ends by saying where each rule is checked: in code, only in `tokens.json`, on the rendered page by `taste`, or not at all. Passing `check` means the values are tokens, not that the page has taste.
 
 ```sh
 gusteau check --root ../app --tokens ../app/design/tokens.ts --limit 50
