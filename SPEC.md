@@ -44,7 +44,10 @@ A component (`.gusteau/components/<level>/<slug>.md`) has YAML front matter:
 
 - `init` writes a project sheet from the global rules and the request. Value
   choices diverge from what earlier projects used; that happens in code, from
-  internal history, and is never written into any prompt.
+  internal history, and is never written into any prompt. Fonts come from a
+  small catalog scored by traits the request and global prefs call for; the
+  reason is written to DESIGN.md and a proposed decision. Room words widen
+  the space and type scales.
 - `brief` prints the compact context an agent reads at task time.
 - `learn` records a preference, or reads review.json and DECISIONS.md. A
   project preference seen in 2+ projects becomes a global candidate; it is
@@ -53,7 +56,8 @@ A component (`.gusteau/components/<level>/<slug>.md`) has YAML front matter:
   `ref save <name> <file>` stores one written from the template.
 - `check` lints code for values that aren't tokens (CSS, JS/TS/JSX/TSX, QML,
   HTML, Vue, Svelte), checks the component library for contradictions, and
-  reports failures ranked by severity plus rule coverage. Exit code 1 when
+  reports failures ranked by severity plus where each rule is checked (code,
+  tokens.json only, the rendered page via `taste`, unchecked). Exit code 1 when
   anything fails, so a loop can run until it passes.
 - `taste <page>` renders a page headless (playwright-core) and measures it:
   filled actions, accent uses, all caps, `!`, heavy text, empty space, the

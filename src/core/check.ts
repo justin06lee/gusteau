@@ -4,6 +4,7 @@ import { componentFailures, loadComponents } from "./components";
 import { EXPORT_MARK } from "./export";
 import { loadRules, type Rule } from "./rules";
 import { readText, walk } from "./store";
+import { TASTE_RULES } from "./taste";
 import { type Failure, loadTokens, tokensPath, validateTokens } from "./tokens";
 
 type Kind = "color" | "radius" | "type" | "space";
@@ -132,7 +133,18 @@ export function lint(root: string, tokens: unknown, skip: string[] = []): Failur
   return out;
 }
 
-export type Report = { failures: Failure[]; coverage: { checked: number; total: number; unchecked: string[] }; passed: boolean };
+/** Where each rule is really checked, by id: saved rules.yaml files carry stale `check` fields, so they don't count. */
+const IN_CODE = ["values.tokens", "shape.radius"];
+const IN_TOKENS = ["spacing.grid", "type.families", "type.body", "type.leading", "color.contrast", "motion.duration", "touch.target"];
+export type Coverage = { total: number; code: string[]; tokens: string[]; page: string[]; unchecked: string[] };
+
+export function coverage(rules: Rule[]): Coverage {
+  const ids = rules.map((r) => r.id), has = (list: string[]) => list.filter((id) => ids.includes(id));
+  const [code, tokens, page] = [has(IN_CODE), has(IN_TOKENS), has(TASTE_RULES)];
+  return { total: ids.length, code, tokens, page, unchecked: ids.filter((id) => ![...code, ...tokens, ...page].includes(id)) };
+}
+
+export type Report = { failures: Failure[]; coverage: Coverage; passed: boolean };
 
 export async function check(opts: { root?: string; tokens?: string; rules?: Rule[] } = {}): Promise<Report> {
   const root = resolve(opts.root ?? ".");
@@ -146,6 +158,5 @@ export async function check(opts: { root?: string; tokens?: string; rules?: Rule
   }
   failures.push(...componentFailures(loadComponents(root), opts.tokens ? null : (source?.values as any), root));
   failures.sort((a, b) => b.severity - a.severity || a.where.localeCompare(b.where, undefined, { numeric: true }));
-  const unchecked = rules.filter((r) => !r.check).map((r) => r.id);
-  return { failures, coverage: { checked: rules.length - unchecked.length, total: rules.length, unchecked }, passed: failures.length === 0 };
+  return { failures, coverage: coverage(rules), passed: failures.length === 0 };
 }

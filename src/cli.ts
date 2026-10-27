@@ -52,7 +52,12 @@ const level = (s?: string) => (s && !LEVELS.includes(s as Level) ? fail(`level i
 export function formatReport(r: Report, limit = 20): string {
   const lines = r.failures.slice(0, limit).map((f) => `[${f.severity}] ${f.where}  ${f.message}${f.fix ? `  → ${f.fix}` : ""}  (${f.rule})`);
   if (r.failures.length > limit) lines.push(`… ${r.failures.length - limit} more`);
-  lines.push(`${r.passed ? "passed" : `${r.failures.length} failing`}; rules with a check: ${r.coverage.checked}/${r.coverage.total}`);
+  const c = r.coverage, list = (ids: string[]) => ids.join(", ") || "none";
+  lines.push(r.passed ? "passed" : `${r.failures.length} failing`,
+    `of ${c.total} rules, checked in code: ${list(c.code)}`,
+    `  in tokens.json only: ${list(c.tokens.filter((id) => !c.page.includes(id)))}`,
+    `  on the rendered page, by gusteau taste: ${list(c.page)}`,
+    `  unchecked: ${list(c.unchecked)}`);
   return lines.join("\n");
 }
 
@@ -60,8 +65,8 @@ switch (cmd) {
   case "init": {
     const request = args.join(" ") || fail('say what you are building: gusteau init "<request>"');
     try {
-      const { dir, tokens } = initProject(root, request, { name: o.name, force: o.force });
-      console.log(`wrote ${dir}\nfonts ${tokens.font.heading} / ${tokens.font.body}, accent ${tokens.color.accent}`);
+      const { dir, tokens, fonts } = initProject(root, request, { name: o.name, force: o.force });
+      console.log(`wrote ${dir} for ${tokens.name}\nfonts ${tokens.font.heading} / ${tokens.font.body}: ${fonts}\naccent ${tokens.color.accent}`);
     } catch (e) { fail((e as Error).message); }
     break;
   }

@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compileBrief } from "../src/core/brief";
@@ -7,12 +7,12 @@ import { check, lint } from "../src/core/check";
 import { contrast, normalizeHex } from "../src/core/color";
 import { addComponent, componentFailures, loadComponents, searchComponents } from "../src/core/components";
 import { cssVars, exportTokens, typeNames } from "../src/core/export";
-import { initProject } from "../src/core/init";
+import { initProject, nameFrom } from "../src/core/init";
 import { addPref, globalCandidates, parseDecisions, parseReview, promote } from "../src/core/prefs";
 import { quickChecks } from "../src/core/primers";
 import { lookupRef, saveRef } from "../src/core/refs";
 import { loadRules } from "../src/core/rules";
-import { generateTokens, loadTokens, validateTokens } from "../src/core/tokens";
+import { FONTS, generateTokens, loadTokens, validateTokens } from "../src/core/tokens";
 import { render, scoreTaste, type Metrics } from "../src/core/taste";
 
 const tmp = () => mkdtempSync(join(tmpdir(), "gusteau-"));
@@ -48,6 +48,44 @@ describe("init and tokens", () => {
     initProject(root, "a todo app");
     expect(() => initProject(root, "a todo app")).toThrow();
     expect(() => initProject(root, "a todo app", { force: true })).not.toThrow();
+  });
+
+  test("muted text is readable on the surface too, not only the page", () => {
+    for (const req of ["a calm notes app", "a dark terminal dashboard", "a spacious landing page", "a bank app"]) {
+      const t = generateTokens("x", req, loadRules(), tmp());
+      expect(contrast(t.color.muted, t.color.surface)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  test("asking for room widens the space and type scales", () => {
+    const roomy = generateTokens("x", "a spacious landing page", loadRules(), tmp());
+    expect(roomy.space).toContain(96);
+    expect(roomy.space).toContain(128);
+    expect(roomy.type.scale).toHaveLength(8);
+    expect(validateTokens(roomy, loadRules())).toEqual([]);
+    expect(typeNames(roomy.type)).toContain("4xl");
+    const plain = generateTokens("x", "a todo app", loadRules(), tmp());
+    expect(Math.max(...plain.space)).toBe(64);
+    // a global pref asks for room even when the request doesn't
+    expect(generateTokens("x", "a todo app", loadRules(), tmp(), "Breathing room").space).toContain(128);
+  });
+
+  test("fonts are chosen for a stated reason, and the reason is written down", () => {
+    const root = tmp();
+    const { tokens, fonts } = initProject(root, "a calm notes app");
+    expect(FONTS.find((f) => f.name === tokens.font.heading)?.traits).toContain("calm");
+    expect(fonts).toContain('"calm"');
+    expect(readFileSync(join(root, ".gusteau", "DESIGN.md"), "utf8")).toContain(fonts);
+    const d = parseDecisions(readFileSync(join(root, ".gusteau", "DECISIONS.md"), "utf8"));
+    expect(d).toEqual([expect.objectContaining({ id: "d-fonts", status: "proposed" })]);
+  });
+
+  test("the project is named from the request before the folder", () => {
+    expect(nameFrom("a recipe box called Mise")).toBe("Mise");
+    expect(nameFrom('a journal named "Small Hours" for nights')).toBe("Small Hours");
+    expect(nameFrom("a notes app called Quiet Notes, for writers")).toBe("Quiet Notes");
+    expect(nameFrom("a todo app")).toBeUndefined();
+    expect(initProject(tmp(), "a recipe box called Mise").tokens.name).toBe("Mise");
   });
 });
 
@@ -109,8 +147,12 @@ describe("check", () => {
     initProject(root, "a notes app");
     const r = await check({ root });
     expect(r.passed).toBe(true);
-    expect(r.coverage.checked).toBeGreaterThan(0);
     expect(r.coverage.total).toBe(loadRules().length);
+    expect(r.coverage.code).toEqual(["values.tokens", "shape.radius"]);
+    expect(r.coverage.page).toContain("ux.goal");
+    expect(r.coverage.unchecked).toEqual(["ux.feedback"]);
+    const counted = new Set([...r.coverage.code, ...r.coverage.tokens, ...r.coverage.page, ...r.coverage.unchecked]);
+    expect(counted.size).toBe(r.coverage.total);
   });
 });
 
