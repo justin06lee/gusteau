@@ -4,6 +4,7 @@ import { z } from "zod";
 import { compileBrief } from "./core/brief";
 import { check } from "./core/check";
 import { exportTokens } from "./core/export";
+import { taste } from "./core/taste";
 import { loadTokens } from "./core/tokens";
 import { addComponent, LEVELS, searchComponents } from "./core/components";
 import { initProject } from "./core/init";
@@ -21,6 +22,8 @@ export function server(): McpServer {
     async (a) => text(compileBrief(a.root)));
   s.registerTool("check", { description: "What's off in the code and the component library, worst first. Fix the top item and run it again until it passes.", inputSchema: { root, tokens: z.string().optional().describe("Token file, if not .gusteau/tokens.json") } },
     async (a) => text(JSON.stringify(await check({ root: a.root, tokens: a.tokens }), null, 2)));
+  s.registerTool("taste", { description: "Render a page (file or URL) and measure it against the user's preferences and the rules a value lint can't see: filled actions, accent use, all caps, '!', whitespace, contrast, line length.", inputSchema: { root, target: z.string().describe("HTML file or URL"), width: z.number().optional() } },
+    async (a) => text(JSON.stringify(await taste(a.target, { root: a.root, width: a.width }), null, 2)));
   s.registerTool("export", { description: "The tokens as CSS custom properties or a TS module, for code to import instead of writing raw values.", inputSchema: { root, format: z.enum(["css", "ts"]).optional() } },
     async (a) => { const t = loadTokens(a.root); return text(t ? exportTokens(t, a.format ?? "css") : "no tokens yet: run init"); });
   s.registerTool("init", { description: "Set up a project's design sheet from what the user is building.", inputSchema: { root, request: z.string(), name: z.string().optional(), force: z.boolean().optional() } },

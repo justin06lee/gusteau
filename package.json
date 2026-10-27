@@ -37,12 +37,13 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun build src/cli.ts --compile --outfile dist/gusteau",
+    "build": "bun build src/cli.ts --compile --external chromium-bidi --external 'chromium-bidi/*' --outfile dist/gusteau",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
+    "playwright-core": "1.64.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +13,7 @@ import { quickChecks } from "../src/core/primers";
 import { lookupRef, saveRef } from "../src/core/refs";
 import { loadRules } from "../src/core/rules";
 import { generateTokens, loadTokens, validateTokens } from "../src/core/tokens";
+import { render, scoreTaste, type Metrics } from "../src/core/taste";
 
 const tmp = () => mkdtempSync(join(tmpdir(), "gusteau-"));
 const put = (root: string, file: string, text: string) => {
@@ -179,5 +180,47 @@ describe("refs", () => {
     expect(lookupRef("linear")).toContain("# Linear");
     expect(lookupRef("Linear App")).toContain("# Linear");
     expect(lookupRef("nothing here")).toBeNull();
+  });
+});
+
+describe("taste", () => {
+  const calm: Metrics = {
+    url: "x", width: 1280, actions: 2, primary: 1, primaryAboveFold: 1, accentUses: 1, hues: 1, colors: 5,
+    caps: 0, bangs: 0, heavy: 0, whitespace: 0.7, maxGap: 64, lowContrast: [], longLines: [], examples: { caps: [], primary: ["Start"] },
+  };
+  const loud: Metrics = { ...calm, actions: 7, primary: 3, primaryAboveFold: 3, accentUses: 12, caps: 9, bangs: 5, heavy: 4, whitespace: 0.4, maxGap: 16, examples: { caps: ["BUY NOW"], primary: ["BUY", "GET", "TRY"] } };
+  const pref = (id: string, says: string) => ({ id, says, scope: "global" as const, strength: "strong" as const });
+  const prefs = [pref("p1", "Quiet confidence: no shouting"), pref("p2", "Breathing room between groups"), pref("p3", "Remove before adding")];
+
+  test("findings name the preference that asked for them", () => {
+    const fs = scoreTaste(loud, prefs, loadRules(), null);
+    const from = (id: string) => fs.filter((f) => f.from.startsWith(id)).length;
+    expect([from("p1"), from("p2"), from("p3")]).toEqual([4, 2, 2]);
+    expect(fs.find((f) => f.from.startsWith("p1"))!.from).toContain("Quiet confidence");
+    expect(fs.some((f) => f.from === "ux.goal")).toBe(false); // primary is already the pref's finding
+  });
+
+  test("no prefs: only the rules judge; a calm page passes", () => {
+    expect(scoreTaste(calm, prefs, loadRules(), null)).toEqual([]);
+    const fs = scoreTaste({ ...loud, hues: 3, lowContrast: [{ text: "fine print", ratio: 3.1, floor: 4.5 }] }, [], loadRules(), null);
+    expect(fs.map((f) => f.from).sort()).toEqual(["color.accent", "color.contrast", "ux.goal"]);
+    expect(fs[0]!.from).toBe("color.contrast");
+  });
+
+  describe("rendered", () => {
+    let browser = true;
+    beforeAll(async () => { await render("data:text/html,<p>x</p>").catch(() => (browser = false)); });
+
+    test("measures a loud page in a browser", async () => {
+      if (!browser) return console.warn("skipped: no chromium for playwright-core");
+      const dir = tmp();
+      put(dir, "page.html", `<body style="margin:0;background:#fff;color:#111;font:16px sans-serif">
+        <h1 style="text-transform:uppercase;font-weight:900">Big sale!!</h1>
+        <button style="background:#0057ff;color:#fff;border:0">BUY NOW</button><button style="background:#111;color:#fff;border:0">Try it</button>
+        <p style="color:#aaa">fine print</p></body>`);
+      const m = await render(join(dir, "page.html"), { accent: "#0057ff" });
+      expect([m.actions, m.primary, m.caps, m.bangs, m.heavy, m.accentUses]).toEqual([2, 2, 2, 2, 1, 1]);
+      expect(m.lowContrast.map((c) => c.text)).toEqual(["fine print"]);
+    }, 30000);
   });
 });
