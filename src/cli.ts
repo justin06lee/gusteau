@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { parseArgs } from "node:util";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { compileBrief } from "./core/brief";
 import { check, type Report } from "./core/check";
 import { addComponent, LEVELS, loadComponents, searchComponents, type Level } from "./core/components";
@@ -9,11 +9,14 @@ import { addPref, globalCandidates, learnFromProject, promote, type Strength } f
 import { primer, PRIMERS } from "./core/primers";
 import { lookupRef, refTemplate, saveRef } from "./core/refs";
 import { AGENTS_SNIPPET } from "./core/agents";
+import { exportTokens, type Format } from "./core/export";
+import { loadTokens } from "./core/tokens";
 
 const USAGE = `gusteau: a taste layer for agents
 
   gusteau init "<what you're building>" [--name <name>] [--force]
   gusteau brief
+  gusteau export [--format css|ts] [--out <file>]
   gusteau check [--root <dir>] [--tokens <file>] [--json] [--limit <n>]
   gusteau learn --says "<pref>" [--why ..] [--instead ..] [--scope project|global] [--strength hard|strong|lean] [--tags a,b]
   gusteau learn --from-project
@@ -34,6 +37,7 @@ const { values: o, positionals } = parseArgs({
     says: { type: "string" }, why: { type: "string" }, instead: { type: "string" }, scope: { type: "string" },
     strength: { type: "string" }, tags: { type: "string" }, "from-project": { type: "boolean" },
     level: { type: "string" }, role: { type: "string" }, uses: { type: "string" }, files: { type: "string" }, notes: { type: "string" },
+    format: { type: "string" }, out: { type: "string" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -60,6 +64,14 @@ switch (cmd) {
     break;
   }
   case "brief": process.stdout.write(compileBrief(root)); break;
+  case "export": {
+    const format = (o.format ?? (o.out?.endsWith(".ts") ? "ts" : "css")) as Format;
+    if (format !== "css" && format !== "ts") fail("--format is css or ts");
+    const tokens = loadTokens(root) ?? fail("no tokens yet: run gusteau init");
+    const text = exportTokens(tokens, format);
+    if (o.out) { writeFileSync(o.out, text); console.log(`wrote ${o.out}`); } else process.stdout.write(text);
+    break;
+  }
   case "check": {
     const r = await check({ root, tokens: o.tokens });
     console.log(o.json ? JSON.stringify(r, null, 2) : formatReport(r, Number(o.limit ?? 20)));

@@ -6,6 +6,7 @@ import { compileBrief } from "../src/core/brief";
 import { check, lint } from "../src/core/check";
 import { contrast, normalizeHex } from "../src/core/color";
 import { addComponent, componentFailures, loadComponents, searchComponents } from "../src/core/components";
+import { cssVars, exportTokens, typeNames } from "../src/core/export";
 import { initProject } from "../src/core/init";
 import { addPref, globalCandidates, parseDecisions, parseReview, promote } from "../src/core/prefs";
 import { quickChecks } from "../src/core/primers";
@@ -109,6 +110,24 @@ describe("check", () => {
     expect(r.passed).toBe(true);
     expect(r.coverage.checked).toBeGreaterThan(0);
     expect(r.coverage.total).toBe(loadRules().length);
+  });
+});
+
+describe("export", () => {
+  test("css vars cover every token and pass check when written into the project", async () => {
+    const root = tmp();
+    const { tokens } = initProject(root, "a notes app");
+    const vars = new Map(cssVars(tokens));
+    expect(vars.get("--color-on-accent")).toBe(tokens.color.onAccent);
+    expect(vars.get("--type-body")).toBe(`${tokens.type.body}px`);
+    expect(vars.get(`--space-${tokens.space.length}`)).toBe(`${tokens.space.at(-1)}px`);
+    put(root, "web/tokens.css", exportTokens(tokens, "css"));
+    put(root, "web/tokens.ts", exportTokens(tokens, "ts"));
+    expect((await check({ root })).passed).toBe(true);
+  });
+
+  test("type steps are named around the body size", () => {
+    expect(typeNames({ body: 16, ratio: 1.25, scale: [10, 13, 16, 20, 25, 31, 39], leading: 1.6, leadingTight: 1.2 })).toEqual(["xs", "sm", "body", "md", "lg", "xl", "2xl"]);
   });
 });
 
