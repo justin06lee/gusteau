@@ -1,6 +1,7 @@
 import { relative, resolve } from "node:path";
 import { hslToHex, normalizeHex } from "./color";
 import { componentFailures, loadComponents } from "./components";
+import { EXPORT_MARK } from "./export";
 import { loadRules, type Rule } from "./rules";
 import { readText, walk } from "./store";
 import { type Failure, loadTokens, tokensPath, validateTokens } from "./tokens";
@@ -95,7 +96,9 @@ export function lint(root: string, tokens: unknown, skip: string[] = []): Failur
   const { numbers, colors, paths } = flattenTokens(tokens);
   const out: Failure[] = [];
   for (const file of walk(root).filter((f) => EXT.test(f) && !skip.includes(resolve(f)) && !/\.(test|spec|d)\.[jt]sx?$/.test(f))) {
-    const lines = readText(file)!.split("\n");
+    const text = readText(file)!;
+    if (text.slice(0, 200).includes(EXPORT_MARK)) continue;
+    const lines = text.split("\n");
     const rel = relative(root, file);
     lines.forEach((line, i) => {
       if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;

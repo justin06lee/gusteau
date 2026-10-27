@@ -3,6 +3,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { compileBrief } from "./core/brief";
 import { check } from "./core/check";
+import { exportTokens } from "./core/export";
+import { loadTokens } from "./core/tokens";
 import { addComponent, LEVELS, searchComponents } from "./core/components";
 import { initProject } from "./core/init";
 import { addPref } from "./core/prefs";
@@ -19,6 +21,8 @@ export function server(): McpServer {
     async (a) => text(compileBrief(a.root)));
   s.registerTool("check", { description: "What's off in the code and the component library, worst first. Fix the top item and run it again until it passes.", inputSchema: { root, tokens: z.string().optional().describe("Token file, if not .gusteau/tokens.json") } },
     async (a) => text(JSON.stringify(await check({ root: a.root, tokens: a.tokens }), null, 2)));
+  s.registerTool("export", { description: "The tokens as CSS custom properties or a TS module, for code to import instead of writing raw values.", inputSchema: { root, format: z.enum(["css", "ts"]).optional() } },
+    async (a) => { const t = loadTokens(a.root); return text(t ? exportTokens(t, a.format ?? "css") : "no tokens yet: run init"); });
   s.registerTool("init", { description: "Set up a project's design sheet from what the user is building.", inputSchema: { root, request: z.string(), name: z.string().optional(), force: z.boolean().optional() } },
     async (a) => text(JSON.stringify(initProject(a.root ?? process.cwd(), a.request, { name: a.name, force: a.force }).tokens, null, 2)));
   s.registerTool("ref_lookup", { description: "The saved design sheet for a named company or product, or 'not found'.", inputSchema: { name: z.string() } },

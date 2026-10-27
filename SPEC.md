@@ -55,6 +55,8 @@ A component (`.gusteau/components/<level>/<slug>.md`) has YAML front matter:
   HTML, Vue, Svelte), checks the component library for contradictions, and
   reports failures ranked by severity plus rule coverage. Exit code 1 when
   anything fails, so a loop can run until it passes.
+- `export` writes the tokens as CSS custom properties or a TS module, marked
+  as generated so `check` skips them.
 - `component add | search | list` manages the atomic library.
 - `mcp` serves all of the above over stdio.
 
