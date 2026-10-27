@@ -55,6 +55,11 @@ A component (`.gusteau/components/<level>/<slug>.md`) has YAML front matter:
   HTML, Vue, Svelte), checks the component library for contradictions, and
   reports failures ranked by severity plus rule coverage. Exit code 1 when
   anything fails, so a loop can run until it passes.
+- `taste <page>` renders a page headless (playwright-core) and measures it:
+  filled actions, accent uses, all caps, `!`, heavy text, empty space, the
+  widest section break, contrast and line length. Preferences set the limits
+  by their words; each finding names its preference or rule. Exit code 1 when
+  anything fails.
 - `export` writes the tokens as CSS custom properties or a TS module, marked
   as generated so `check` skips them.
 - `component add | search | list` manages the atomic library.

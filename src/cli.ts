@@ -11,6 +11,7 @@ import { lookupRef, refTemplate, saveRef } from "./core/refs";
 import { AGENTS_SNIPPET } from "./core/agents";
 import { exportTokens, type Format } from "./core/export";
 import { loadTokens } from "./core/tokens";
+import { formatTaste, taste } from "./core/taste";
 
 const USAGE = `gusteau: a taste layer for agents
 
@@ -18,6 +19,7 @@ const USAGE = `gusteau: a taste layer for agents
   gusteau brief
   gusteau export [--format css|ts] [--out <file>]
   gusteau check [--root <dir>] [--tokens <file>] [--json] [--limit <n>]
+  gusteau taste <file or url> [--width <px>] [--json]
   gusteau learn --says "<pref>" [--why ..] [--instead ..] [--scope project|global] [--strength hard|strong|lean] [--tags a,b]
   gusteau learn --from-project
   gusteau candidates | promote <id or text>
@@ -37,7 +39,7 @@ const { values: o, positionals } = parseArgs({
     says: { type: "string" }, why: { type: "string" }, instead: { type: "string" }, scope: { type: "string" },
     strength: { type: "string" }, tags: { type: "string" }, "from-project": { type: "boolean" },
     level: { type: "string" }, role: { type: "string" }, uses: { type: "string" }, files: { type: "string" }, notes: { type: "string" },
-    format: { type: "string" }, out: { type: "string" },
+    format: { type: "string" }, out: { type: "string" }, width: { type: "string" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -76,6 +78,14 @@ switch (cmd) {
     const r = await check({ root, tokens: o.tokens });
     console.log(o.json ? JSON.stringify(r, null, 2) : formatReport(r, Number(o.limit ?? 20)));
     process.exit(r.passed ? 0 : 1);
+  }
+  case "taste": {
+    const target = args[0] ?? fail("taste <file or url>: the page to render");
+    try {
+      const r = await taste(target, { root, width: o.width ? Number(o.width) : undefined });
+      console.log(o.json ? JSON.stringify(r, null, 2) : formatTaste(r));
+      process.exit(r.passed ? 0 : 1);
+    } catch (e) { fail((e as Error).message); }
   }
   case "learn": {
     if (o["from-project"]) { const added = learnFromProject(root); console.log(`learned ${added.length} from this project`); break; }
