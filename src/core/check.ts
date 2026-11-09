@@ -88,21 +88,35 @@ function nearest(n: number, kind: Kind, set: Set<number>, paths: Map<number, str
   return (own.length ? own : all).reduce((a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a), Infinity);
 }
 
+const IGNORE = "gusteau-ignore";
+export type LintStats = { files: number; ignored: number };
+
 /**
  * Hardcoded sizes and colors. Values that aren't tokens rank by kind; a literal that
  * copies a token's value ranks lowest (severity 0), since it drifts when the token changes.
  * Lines that define a value (QML properties, CSS custom properties) can repeat a token freely.
  */
-export function lint(root: string, tokens: unknown, skip: string[] = []): Failure[] {
+export function lint(root: string, tokens: unknown, skip: string[] = [], seen: LintStats = { files: 0, ignored: 0 }): Failure[] {
   const { numbers, colors, paths } = flattenTokens(tokens);
   const out: Failure[] = [];
   for (const file of walk(root).filter((f) => EXT.test(f) && !skip.includes(resolve(f)) && !/\.(test|spec|d)\.[jt]sx?$/.test(f))) {
     const text = readText(file)!;
     if (text.slice(0, 200).includes(EXPORT_MARK)) continue;
+    seen.files++;
     const lines = text.split("\n");
+    if (text.slice(0, 200).includes(IGNORE + "-file")) { seen.ignored += lines.length; continue; }
     const rel = relative(root, file);
-    lines.forEach((line, i) => {
-      if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+    let block = false, next = false;
+    lines.forEach((raw, i) => {
+      // a value the user chose on purpose (a brand mark, an OG image) is marked, and the marks are counted in the report
+      const ignored = block || next || raw.includes(IGNORE) && !raw.includes(IGNORE + "-end");
+      next = raw.includes(IGNORE + "-next-line");
+      if (raw.includes(IGNORE + "-start")) block = true;
+      if (raw.includes(IGNORE + "-end")) block = false;
+      if (ignored) return void seen.ignored++;
+      if (/^\s*(\/\/|\*|\/\*|<!--)/.test(raw)) return;
+      // a value named in a trailing comment ("#7a6f63 was 4.28:1") is a note, not code; `://` in a URL is not a comment
+      const line = raw.replace(/\/\*.*?(\*\/|$)|<!--.*?(-->|$)/g, "").replace(/(^|[^:])\/\/.*$/, "$1");
       const defines = /\bproperty\s+\w+\s+\w+\s*:|^\s*--[\w-]+\s*:/.test(line);
       const where = `${rel}:${i + 1}`;
       for (const { ext, re } of PATTERNS) {
@@ -113,6 +127,7 @@ export function lint(root: string, tokens: unknown, skip: string[] = []): Failur
           for (const v of m[2].matchAll(/(-?\d+(?:\.\d+)?)(px|rem)?/g)) {
             if (/var\(|calc\(|%|\bem\b|vh|vw|auto/.test(m[2]) && !v[2]) continue;
             const n = Math.abs(+v[1] * (v[2] === "rem" ? 16 : 1));
+            if (kind === "radius" && n >= 999) continue; // 999px / 9999px: a pill, the full rounding, not a size
             if (numbers.has(n)) {
               if (n > 1 && !defines) out.push({ severity: 0, rule: "values.tokens", where, message: `${m[1]} ${v[0]} copies a token value`, fix: `reference ${pathFor(paths.get(n)!, kind)}` });
               continue;
@@ -144,19 +159,20 @@ export function coverage(rules: Rule[]): Coverage {
   return { total: ids.length, code, tokens, page, unchecked: ids.filter((id) => ![...code, ...tokens, ...page].includes(id)) };
 }
 
-export type Report = { failures: Failure[]; coverage: Coverage; passed: boolean };
+export type Report = { failures: Failure[]; coverage: Coverage; passed: boolean; scanned: LintStats };
 
 export async function check(opts: { root?: string; tokens?: string; rules?: Rule[] } = {}): Promise<Report> {
   const root = resolve(opts.root ?? ".");
   const rules = opts.rules ?? loadRules();
   const source = await loadTokenSource(opts.tokens, root);
   const failures: Failure[] = [];
+  const scanned: LintStats = { files: 0, ignored: 0 };
   if (!source) failures.push({ severity: 3, rule: "values.tokens", where: root, message: "no tokens yet", fix: "run gusteau init" });
   else {
-    failures.push(...lint(root, source.values, [source.path]));
+    failures.push(...lint(root, source.values, [source.path], scanned));
     if (!opts.tokens) failures.push(...validateTokens(source.values as any, rules));
   }
   failures.push(...componentFailures(loadComponents(root), opts.tokens ? null : (source?.values as any), root));
   failures.sort((a, b) => b.severity - a.severity || a.where.localeCompare(b.where, undefined, { numeric: true }));
-  return { failures, coverage: coverage(rules), passed: failures.length === 0 };
+  return { failures, coverage: coverage(rules), passed: failures.length === 0, scanned };
 }
