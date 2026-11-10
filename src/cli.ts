@@ -5,6 +5,8 @@ import { compileBrief } from "./core/brief";
 import { check, type Report } from "./core/check";
 import { addComponent, LEVELS, loadComponents, searchComponents, type Level } from "./core/components";
 import { initProject } from "./core/init";
+import { KINDS, loadKind, saveKind, type Kind } from "./core/kind";
+import { addRejection } from "./core/rejections";
 import { addPref, globalCandidates, learnFromProject, promote, type Strength } from "./core/prefs";
 import { primer, PRIMERS } from "./core/primers";
 import { lookupRef, refTemplate, saveRef } from "./core/refs";
@@ -15,13 +17,15 @@ import { formatTaste, taste } from "./core/taste";
 
 const USAGE = `gusteau: a taste layer for agents
 
-  gusteau init "<what you're building>" [--name <name>] [--force]
+  gusteau init "<what you're building>" [--name <name>] [--kind product|marketing|terminal] [--force]
+  gusteau kind [product|marketing|terminal]
   gusteau brief
   gusteau export [--format css|ts] [--out <file>]
   gusteau check [--root <dir>] [--tokens <file>] [--json] [--limit <n>]
   gusteau taste <file or url> [--width <px>] [--json]
   gusteau learn --says "<pref>" [--why ..] [--instead ..] [--scope project|global] [--strength hard|strong|lean] [--tags a,b]
   gusteau learn --from-project
+  gusteau reject --tried "<what was tried>" [--said "<their words>"] [--instead ..] [--scope project|global]
   gusteau candidates | promote <id or text>
   gusteau ref <name> | ref save <name> <file> | ref template
   gusteau component add <name> --level <level> [--role ..] [--uses a,b] [--tokens prop=path,..] [--files a,b] [--notes ..]
@@ -35,7 +39,8 @@ const { values: o, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     root: { type: "string" }, tokens: { type: "string" }, json: { type: "boolean" }, limit: { type: "string" },
-    name: { type: "string" }, force: { type: "boolean" },
+    name: { type: "string" }, force: { type: "boolean" }, kind: { type: "string" },
+    tried: { type: "string" }, said: { type: "string" },
     says: { type: "string" }, why: { type: "string" }, instead: { type: "string" }, scope: { type: "string" },
     strength: { type: "string" }, tags: { type: "string" }, "from-project": { type: "boolean" },
     level: { type: "string" }, role: { type: "string" }, uses: { type: "string" }, files: { type: "string" }, notes: { type: "string" },
@@ -47,6 +52,7 @@ const [cmd, ...args] = positionals;
 const list = (s?: string) => (s ? s.split(",").map((x) => x.trim()).filter(Boolean) : undefined);
 const fail = (msg: string): never => (console.error(msg), process.exit(2));
 const root = o.root ?? process.cwd();
+const kind = (s?: string) => (s && !KINDS.includes(s as Kind) ? fail(`kind is one of ${KINDS.join(", ")}`) : (s as Kind | undefined));
 const level = (s?: string) => (s && !LEVELS.includes(s as Level) ? fail(`level is one of ${LEVELS.join(", ")}`) : (s as Level | undefined));
 
 export function formatReport(r: Report, limit = 20): string {
@@ -68,9 +74,14 @@ switch (cmd) {
   case "init": {
     const request = args.join(" ") || fail('say what you are building: gusteau init "<request>"');
     try {
-      const { dir, tokens, fonts } = initProject(root, request, { name: o.name, force: o.force });
-      console.log(`wrote ${dir} for ${tokens.name}\nfonts ${tokens.font.heading} / ${tokens.font.body}: ${fonts}\naccent ${tokens.color.accent}`);
+      const { dir, tokens, fonts, kind: k } = initProject(root, request, { name: o.name, force: o.force, kind: kind(o.kind) });
+      console.log(`wrote ${dir} for ${tokens.name} (${k})\nfonts ${tokens.font.heading} / ${tokens.font.body}: ${fonts}\naccent ${tokens.color.accent}`);
     } catch (e) { fail((e as Error).message); }
+    break;
+  }
+  case "kind": {
+    if (args[0]) saveKind(kind(args[0])!, root);
+    console.log(loadKind(root));
     break;
   }
   case "brief": process.stdout.write(compileBrief(root)); break;
@@ -96,11 +107,17 @@ switch (cmd) {
     } catch (e) { fail((e as Error).message); }
   }
   case "learn": {
-    if (o["from-project"]) { const added = learnFromProject(root); console.log(`learned ${added.length} from this project`); break; }
+    if (o["from-project"]) { const added = learnFromProject(root); console.log(`learned ${added.length} prefs and ${added.rejected.length} rejections from this project`); break; }
     const says = o.says ?? fail("learn needs --says or --from-project");
     const scope = (o.scope ?? "project") as "project" | "global";
     const p = addPref({ says, why: o.why, instead: o.instead, scope, strength: (o.strength ?? "strong") as Strength, tags: list(o.tags), source: "manual" }, root);
     console.log(`${p.id} (${p.scope}, ${p.strength})`);
+    break;
+  }
+  case "reject": {
+    const tried = o.tried ?? fail('reject needs --tried "<what was tried>"');
+    const r = addRejection({ tried, said: o.said, instead: o.instead, scope: (o.scope ?? "project") as "project" | "global", source: "manual" }, root);
+    console.log(`${r.id} (${r.scope})`);
     break;
   }
   case "candidates":

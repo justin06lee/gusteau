@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { compileBrief } from "../src/core/brief";
@@ -8,7 +8,9 @@ import { contrast, normalizeHex } from "../src/core/color";
 import { addComponent, componentFailures, loadComponents, searchComponents } from "../src/core/components";
 import { cssVars, exportTokens, typeNames } from "../src/core/export";
 import { initProject, nameFrom } from "../src/core/init";
-import { addPref, globalCandidates, parseDecisions, parseReview, promote } from "../src/core/prefs";
+import { kindFrom, loadKind, rulesFor, saveKind } from "../src/core/kind";
+import { addPref, globalCandidates, learnFromProject, loadPrefs, parseDecisions, parseReview, promote } from "../src/core/prefs";
+import { addRejection, loadRejections } from "../src/core/rejections";
 import { quickChecks } from "../src/core/primers";
 import { lookupRef, saveRef } from "../src/core/refs";
 import { loadRules } from "../src/core/rules";
@@ -48,6 +50,14 @@ describe("init and tokens", () => {
     initProject(root, "a todo app");
     expect(() => initProject(root, "a todo app")).toThrow();
     expect(() => initProject(root, "a todo app", { force: true })).not.toThrow();
+  });
+
+  test("text on the accent is readable whatever hue the accent lands on", () => {
+    for (let i = 0; i < 40; i++) {
+      const t = initProject(tmp(), "a ratatui terminal game").tokens;
+      expect(Math.max(contrast("#ffffff", t.color.accent), contrast(t.color.onAccent, t.color.accent))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(t.color.onAccent, t.color.accent)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   test("muted text is readable on the surface too, not only the page", () => {
@@ -101,12 +111,123 @@ describe("brief", () => {
     for (const absent of ["roastledger", "coffee", "Acme", "history"]) expect(brief).not.toContain(absent);
   });
 
-  test("includes the primers' quick checks, minus those a rule already says", () => {
+  test("leads with taste and leaves the design basics to the primers", () => {
     expect(quickChecks()).toContain("Two fonts or fewer?");
-    const brief = compileBrief(tmp());
-    expect(brief).toContain("Are related things grouped together? (proximity)");
-    expect(brief).toContain("Each screen serves one main goal");
-    for (const said of ["Two fonts or fewer?", "Is the main goal of the page obvious?", "Strong contrast between text and background?"]) expect(brief).not.toContain(said);
+    addPref({ says: "Separate zones by tone, not lines", scope: "global", strength: "strong" });
+    const root = tmp();
+    initProject(root, "a recipe site");
+    addPref({ says: "Recipes read like a card, not a blog", scope: "project", strength: "strong" }, root);
+    const brief = compileBrief(root);
+    const at = (s: string) => brief.indexOf(s);
+    expect(at("## Taste")).toBeGreaterThan(-1);
+    expect(at("## Taste")).toBeLessThan(at("## This project"));
+    expect(at("Recipes read like a card")).toBeLessThan(at("Tokens in"));
+    expect(at("## This project")).toBeLessThan(at("## Limits"));
+    for (const basic of ["Are related things grouped together? (proximity)", "Each screen serves one main goal", "Every action shows a response", "Before calling it done"]) expect(brief).not.toContain(basic);
+    expect(brief).toContain("body ≥16px · line height 1.4–1.7");
+    expect(brief.split(/\s+/).length).toBeLessThan(400);
+  });
+
+  test("a rule the user added is carried in full, unlike the basics", () => {
+    const { DEFAULT_RULES } = require("../src/core/rules");
+    writeFileSync(join(process.env.GUSTEAU_HOME!, "rules.yaml"), Bun.YAML.stringify([...DEFAULT_RULES, { id: "own.icons", says: "Icons come from one set" }]));
+    expect(compileBrief(tmp())).toContain("- Icons come from one set");
+  });
+});
+
+describe("kind", () => {
+  test("a project that never declared a kind is a product, and everything still works", async () => {
+    const root = tmp();
+    initProject(root, "a todo app");
+    rmSync(join(root, ".gusteau", "project.yaml"));
+    expect(loadKind(root)).toBe("product");
+    const brief = compileBrief(root);
+    expect(brief).toContain("Kind: product");
+    expect(brief).toContain("tap targets ≥44px");
+    expect((await check({ root })).coverage.total).toBe(13);
+  });
+
+  test("the request sets the kind, and --kind wins", () => {
+    expect(kindFrom("a TUI for managing castles")).toBe("terminal");
+    expect(kindFrom("a landing page for a club")).toBe("marketing");
+    expect(kindFrom("a bank app")).toBe("product");
+    const root = tmp();
+    expect(initProject(root, "a dashboard", { kind: "terminal" }).kind).toBe("terminal");
+    expect(loadKind(root)).toBe("terminal");
+  });
+
+  test("a terminal app drops the web rules from the brief and the check", async () => {
+    const root = tmp();
+    initProject(root, "a ratatui terminal game");
+    const brief = compileBrief(root);
+    for (const web of ["tap targets", "body ≥", "transitions", "font families", "fonts "]) expect(brief).not.toContain(web);
+    expect(brief).toContain("contrast ≥4.5:1");
+    const t = JSON.parse(readFileSync(join(root, ".gusteau", "tokens.json"), "utf8"));
+    t.type.body = 12; t.target = 20;
+    writeFileSync(join(root, ".gusteau", "tokens.json"), JSON.stringify(t));
+    const r = await check({ root });
+    expect(r.failures.map((f) => f.rule)).not.toContain("type.body");
+    expect(r.coverage.total).toBeLessThan(13);
+    saveKind("product", root);
+    expect((await check({ root })).failures.map((f) => f.rule)).toContain("type.body");
+  });
+
+  test("prefs and rules can name the kinds they apply to", () => {
+    addPref({ says: "Motion only to confirm a state change", scope: "global", strength: "strong", kinds: ["product", "terminal"] });
+    const root = tmp();
+    saveKind("marketing", root);
+    expect(compileBrief(root)).not.toContain("Motion only");
+    saveKind("product", root);
+    expect(compileBrief(root)).toContain("Motion only");
+    expect(rulesFor([{ id: "x", says: "x", kinds: ["terminal"] }], "product")).toEqual([]);
+  });
+
+  test("taste lets a marketing page use more color, but not shout", () => {
+    const quiet = [{ id: "p-q", says: "Quiet confidence", scope: "global", strength: "strong" }] as any;
+    const loud: Metrics = {
+      url: "x", width: 1280, actions: 2, primary: 1, primaryAboveFold: 1, accentUses: 9, hues: 4, colors: 5,
+      caps: 2, bangs: 0, heavy: 0, whitespace: 0.7, maxGap: 64, lowContrast: [], longLines: [], examples: { caps: ["JOIN"], primary: ["Start"] },
+    };
+    const from = (k: any) => scoreTaste(loud, quiet, loadRules(), null, k).map((f) => f.message);
+    expect(from("product").some((m) => m.includes("accent is on 9"))).toBe(true);
+    expect(from("product").some((m) => m.includes("saturated hues"))).toBe(true);
+    expect(from("marketing").some((m) => m.includes("accent") || m.includes("hues"))).toBe(false);
+    expect(from("marketing").some((m) => m.includes("all caps"))).toBe(true);
+  });
+});
+
+describe("rejections", () => {
+  test("recorded on their own and shown in the brief with what was chosen instead", () => {
+    const root = tmp();
+    initProject(root, "a club site");
+    const r = addRejection({ tried: "Realistic photo jungle", said: "lost on execution, not on idea", instead: "drawn paper cut-outs", scope: "project", when: "2026-10-31" }, root);
+    expect(r.id).toMatch(/^r-/);
+    expect(loadRejections("project", root)).toHaveLength(1);
+    expect(loadPrefs("project", root)).toEqual([]);
+    const brief = compileBrief(root);
+    expect(brief).toContain("## Tried and turned down");
+    expect(brief).toContain('- Realistic photo jungle: "lost on execution, not on idea". Went with: drawn paper cut-outs (2026-10-31)');
+    expect(compileBrief(tmp())).not.toContain("Realistic photo");
+  });
+
+  test("global rejections reach every project; recording one twice keeps one", () => {
+    addRejection({ tried: "Gradient buttons", scope: "global" });
+    addRejection({ tried: "Gradient buttons", scope: "global", said: "no" });
+    expect(loadRejections("global")).toEqual([expect.objectContaining({ said: "no" })]);
+    expect(compileBrief(tmp())).toContain("- Gradient buttons");
+  });
+
+  test("learn --from-project turns rejected decisions and review items into rejections", () => {
+    const root = tmp();
+    put(root, ".gusteau/DECISIONS.md", "# Decisions\n\n## Ghost buttons\nStatus: accepted\n\n## Outlined pills\nStatus: rejected\nId: d-pills\n\n**Why:** too busy\n\n**Instead of:** ghost buttons\n");
+    put(root, ".gusteau/review.json", JSON.stringify({ items: { "hero-video": { verdict: "reject", thread: [{ author: "you", text: "too much" }] } } }));
+    const added = learnFromProject(root);
+    expect(added.map((p) => p.says)).toEqual(["Ghost buttons"]);
+    expect(added.rejected.map((r) => r.tried)).toEqual(["Outlined pills", "hero-video"]);
+    expect(loadRejections("project", root)).toEqual([
+      expect.objectContaining({ id: "r-d-pills", said: "too busy", source: "decision" }),
+      expect.objectContaining({ tried: "hero-video", said: "too much", source: "review" }),
+    ]);
   });
 });
 

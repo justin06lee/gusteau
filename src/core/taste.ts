@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { normalizeHex } from "./color";
+import { loadKind, rulesFor, type Kind } from "./kind";
 import { effectivePrefs, type Pref, type Strength } from "./prefs";
 import { loadRules, rule, type Rule } from "./rules";
 import { loadTokens, type Tokens } from "./tokens";
@@ -156,7 +157,8 @@ export async function render(target: string, opts: { width?: number; height?: nu
 }
 
 export type Finding = { severity: number; from: string; message: string };
-type Limit = { metric: string; ok: (m: Metrics) => boolean; says: (m: Metrics) => string };
+/** `atmosphere` limits are the ones a marketing page trades away: color and depth, not caps or shouting. */
+type Limit = { metric: string; atmosphere?: boolean; ok: (m: Metrics) => boolean; says: (m: Metrics) => string };
 
 const list = (xs: string[]) => xs.slice(0, 3).map((x) => `"${x}"`).join(", ") + (xs.length > 3 ? ", …" : "");
 
@@ -168,7 +170,7 @@ const ASKS: { words: RegExp; limits: (t: Tokens | null) => Limit[] }[] = [
       { metric: "caps", ok: (m) => m.caps === 0, says: (m) => `${m.caps} elements in all caps: ${list(m.examples.caps)}` },
       { metric: "bangs", ok: (m) => m.bangs === 0, says: (m) => `${m.bangs} exclamation marks` },
       { metric: "heavy", ok: (m) => m.heavy === 0, says: (m) => `${m.heavy} text elements at weight 800 or more` },
-      { metric: "accentUses", ok: (m) => m.accentUses === null || m.accentUses <= 3, says: (m) => `the accent is on ${m.accentUses} elements; 3 at most keeps it for what matters` },
+      { metric: "accentUses", atmosphere: true, ok: (m) => m.accentUses === null || m.accentUses <= 3, says: (m) => `the accent is on ${m.accentUses} elements; 3 at most keeps it for what matters` },
     ],
   },
   {
@@ -192,17 +194,17 @@ const ASKS: { words: RegExp; limits: (t: Tokens | null) => Limit[] }[] = [
 
 const RANK: Record<Strength, number> = { hard: 3, strong: 2, lean: 1 };
 
-/** Findings for a measured page: from the user's preferences (by their words) and from the rules. */
-export function scoreTaste(m: Metrics, prefs: Pref[], rules: Rule[], tokens: Tokens | null): Finding[] {
+/** Findings for a measured page: from the user's preferences (by their words) and from the rules. A marketing page may use more color for atmosphere. */
+export function scoreTaste(m: Metrics, prefs: Pref[], rules: Rule[], tokens: Tokens | null, kind: Kind = "product"): Finding[] {
   const out: Finding[] = [];
   const seen = new Set<string>();
   for (const p of prefs)
     for (const ask of ASKS.filter((a) => a.words.test(p.says)))
-      for (const l of ask.limits(tokens))
+      for (const l of ask.limits(tokens).filter((l) => !(l.atmosphere && kind === "marketing")))
         if (!seen.has(l.metric) && !l.ok(m)) { seen.add(l.metric); out.push({ severity: RANK[p.strength], from: `${p.id} "${p.says.split(/[:.]/)[0]}"`, message: l.says(m) }); }
   if (rule(rules, "ux.goal") && m.primaryAboveFold > 1 && !seen.has("primary"))
     out.push({ severity: 2, from: "ux.goal", message: `${m.primaryAboveFold} filled actions in the first screen: ${list(m.examples.primary)}` });
-  if (rule(rules, "color.accent")) {
+  if (rule(rules, "color.accent") && kind !== "marketing") {
     const max = rule(rules, "color.accent")!.max ?? 1;
     if (m.hues > max) out.push({ severity: 2, from: "color.accent", message: `${m.hues} saturated hues on the page; ${max} accent` });
   }
@@ -220,10 +222,11 @@ export type TasteReport = { metrics: Metrics; findings: Finding[]; passed: boole
 
 export async function taste(target: string, opts: { root?: string; width?: number } = {}): Promise<TasteReport> {
   const tokens = loadTokens(opts.root);
-  const rules = loadRules();
-  const { global, project } = effectivePrefs(opts.root);
+  const kind = loadKind(opts.root);
+  const rules = rulesFor(loadRules(), kind);
+  const { global, project } = effectivePrefs(opts.root, kind);
   const metrics = await render(target, { width: opts.width, accent: tokens?.color.accent, floor: rule(rules, "color.contrast")?.min, measureMax: rule(rules, "type.measure")?.max });
-  const findings = scoreTaste(metrics, [...project, ...global], rules, tokens);
+  const findings = scoreTaste(metrics, [...project, ...global], rules, tokens, kind);
   return { metrics, findings, passed: findings.length === 0 };
 }
 
