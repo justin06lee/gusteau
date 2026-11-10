@@ -53,7 +53,10 @@ export function formatReport(r: Report, limit = 20): string {
   const lines = r.failures.slice(0, limit).map((f) => `[${f.severity}] ${f.where}  ${f.message}${f.fix ? `  → ${f.fix}` : ""}  (${f.rule})`);
   if (r.failures.length > limit) lines.push(`… ${r.failures.length - limit} more`);
   const c = r.coverage, list = (ids: string[]) => ids.join(", ") || "none";
+  const s = r.scanned;
   lines.push(r.passed ? "passed" : `${r.failures.length} failing`,
+    s.files ? `read ${s.files} files${s.ignored ? `; ${s.ignored} lines skipped by gusteau-ignore` : ""}`
+      : "read no code: none of its files are CSS, HTML, JS/TS, Vue, Svelte, Astro or QML, so only tokens.json was checked",
     `of ${c.total} rules, checked in code: ${list(c.code)}`,
     `  in tokens.json only: ${list(c.tokens.filter((id) => !c.page.includes(id)))}`,
     `  on the rendered page, by gusteau taste: ${list(c.page)}`,

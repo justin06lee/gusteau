@@ -64,7 +64,8 @@ export function compileBrief(root = process.cwd()): string {
   ]);
   add("Before calling it done", quickChecks().filter((l) => !restated.some((re) => re.test(l))).map((l) => `- ${l}`));
   add("Tools", [
-    "- `gusteau check` lists what's off; fix the top item and run it again until it passes.",
+    "- `gusteau check` lists what's off; fix the top item and run it again until it passes. A value chosen on purpose (a brand logo's colors, an OG image's sizes) gets a `gusteau-ignore` comment on its line, or `gusteau-ignore-start` / `-end` around a block.",
+    "- When the user approves or corrects a design choice, record it in their words with `gusteau learn --says \"...\" --why \"...\"`.",
     "- When the request names another company's or product's look, `gusteau ref <name>` returns its saved sheet; if there is none, research that design and save one with `gusteau ref save <name> <file>` (`gusteau ref template` prints the outline).",
     "- `gusteau component search <words>` finds pieces already built; `gusteau component add` records a new one.",
     "- `gusteau primer <name>` prints a full primer (elements, principles, typography, color, layout, ux).",

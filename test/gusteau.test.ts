@@ -142,6 +142,25 @@ describe("check", () => {
     expect(msgs.some((m) => /rgb\(51|rgba|currentColor|accent/.test(m))).toBe(false);
   });
 
+  test("comments, pills and marked lines are not failures, and the marks are counted", async () => {
+    const root = tmp();
+    initProject(root, "a notes app");
+    put(root, "web/a.css", ".a { border-radius: 999px; } /* #7a6f63 was 4.28:1 */\n.b { background: url(https://x.io/a.png); } // #123456\n");
+    put(root, "web/Logo.tsx", "{/* gusteau-ignore-start: Google's brand colors */}\n<path fill=\"#4285F4\" />\n<path fill=\"#34A853\" />\n{/* gusteau-ignore-end */}\n<path fill=\"#EA4335\" />\n");
+    const r = await check({ root });
+    expect(r.failures.map((f) => f.where)).toEqual(["web/Logo.tsx:5"]);
+    expect(r.scanned).toEqual({ files: 2, ignored: 4 });
+  });
+
+  test("a project with no code it can read says so instead of only passing", async () => {
+    const root = tmp();
+    initProject(root, "a terminal app");
+    put(root, "src/main.rs", "fn main() {}\n");
+    const r = await check({ root });
+    expect(r.passed).toBe(true);
+    expect(r.scanned.files).toBe(0);
+  });
+
   test("a clean project passes and reports coverage", async () => {
     const root = tmp();
     initProject(root, "a notes app");
