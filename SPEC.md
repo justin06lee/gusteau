@@ -10,7 +10,7 @@ goal.
 | Layer | Where | Holds |
 | --- | --- | --- |
 | Global | `~/.gusteau/` (or `$GUSTEAU_HOME`) | rules (constraints), taste prefs, primers, reference sheets, internal history |
-| Project | `./.gusteau/` | tokens (values), DESIGN.md, DECISIONS.md, review.json, prefs, component library |
+| Project | `./.gusteau/` | project.yaml (kind), tokens (values), DESIGN.md, DECISIONS.md, review.json, prefs, rejections, component library |
 
 Global sets limits, the project picks values. "Spacing sits on a 4px grid" is
 global. "Spacing is 4, 8, 12, 20, 32" is the project's.
@@ -33,6 +33,27 @@ tags: [color, interaction]
 source: review | decision | manual
 ```
 
+Both carry an optional `kinds: [product, marketing, terminal]`; left out, they
+apply to every kind.
+
+A rejection (`rejections.yaml`, global or project):
+
+```yaml
+id: r-1a2b3c
+tried: Realistic photo jungle
+said: lost on execution, not on idea
+instead: Drawn paper cut-outs
+when: 2026-10-31
+scope: global | project
+source: review | decision | manual
+```
+
+A project's kind (`project.yaml`, `kind: product | marketing | terminal`)
+decides which rules bend. Without one, a project is a `product`. A terminal
+app drops spacing.grid, type.families, type.body, type.leading, shape.radius,
+motion.duration and touch.target; a marketing page lets `taste` pass extra
+accent and hue use. A rule with its own `kinds` overrides this table.
+
 A rule (global, `rules.yaml`) is a checkable constraint with an id, a short
 statement, and optional numeric bounds (`min`, `max`, `step`).
 
@@ -48,7 +69,12 @@ A component (`.gusteau/components/<level>/<slug>.md`) has YAML front matter:
   small catalog scored by traits the request and global prefs call for; the
   reason is written to DESIGN.md and a proposed decision. Room words widen
   the space and type scales.
-- `brief` prints the compact context an agent reads at task time.
+- `brief` prints the compact context an agent reads at task time, in this
+  order: goal and kind, the user's global taste, this project (prefs,
+  accepted decisions, tokens, library), tried and turned down, the default
+  rules' limits on one line (rules the user added, in full), tools.
+- `kind [<kind>]` prints or sets the project's kind.
+- `reject` records something tried and turned down.
 - `learn` records a preference, or reads review.json and DECISIONS.md. A
   project preference seen in 2+ projects becomes a global candidate; it is
   promoted only when the user confirms (`promote <id>`).
@@ -79,5 +105,5 @@ projects is done by the code that generates values, never by instruction.
 ## Primers
 
 `primers/*.md` are short reminders (elements, principles, typography, color,
-layout, UX). The brief carries only their quick checks; the full text is one
-`primer <name>` away.
+layout, UX). The brief leaves them out; the full text is one `primer <name>`
+away.

@@ -2,6 +2,7 @@ import { relative, resolve } from "node:path";
 import { hslToHex, normalizeHex } from "./color";
 import { componentFailures, loadComponents } from "./components";
 import { EXPORT_MARK } from "./export";
+import { loadKind, rulesFor } from "./kind";
 import { loadRules, type Rule } from "./rules";
 import { readText, walk } from "./store";
 import { TASTE_RULES } from "./taste";
@@ -163,7 +164,7 @@ export type Report = { failures: Failure[]; coverage: Coverage; passed: boolean;
 
 export async function check(opts: { root?: string; tokens?: string; rules?: Rule[] } = {}): Promise<Report> {
   const root = resolve(opts.root ?? ".");
-  const rules = opts.rules ?? loadRules();
+  const rules = opts.rules ?? rulesFor(loadRules(), loadKind(root));
   const source = await loadTokenSource(opts.tokens, root);
   const failures: Failure[] = [];
   const scanned: LintStats = { files: 0, ignored: 0 };

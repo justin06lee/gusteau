@@ -2,12 +2,13 @@ import { existsSync, mkdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { summarizeTokens } from "./brief";
 import { LEVELS } from "./components";
+import { kindFrom, saveKind, type Kind } from "./kind";
 import { loadPrefs } from "./prefs";
 import { loadRules } from "./rules";
 import { projectDir, writeJson, writeText, writeYaml } from "./store";
 import { fontReason, generateTokens, remember, type Tokens } from "./tokens";
 
-export type InitResult = { dir: string; tokens: Tokens; fonts: string };
+export type InitResult = { dir: string; tokens: Tokens; fonts: string; kind: Kind };
 
 /** The name the request gives the project: "a recipe box called Mise" → "Mise". */
 export function nameFrom(request: string): string | undefined {
@@ -16,7 +17,7 @@ export function nameFrom(request: string): string | undefined {
 }
 
 /** Set up a project's sheet from the global rules and the user's request. */
-export function initProject(root: string, request: string, opts: { name?: string; force?: boolean } = {}): InitResult {
+export function initProject(root: string, request: string, opts: { name?: string; force?: boolean; kind?: Kind } = {}): InitResult {
   root = resolve(root);
   const dir = projectDir(root);
   if (existsSync(join(dir, "tokens.json")) && !opts.force) throw new Error(`${dir} already has tokens; pass --force to replace them`);
@@ -26,7 +27,10 @@ export function initProject(root: string, request: string, opts: { name?: string
   const tokens = generateTokens(name, request, loadRules(), root, taste);
   const fonts = fontReason(tokens.font, request + "\n" + taste);
 
+  const kind = opts.kind ?? kindFrom(request);
+
   writeJson(join(dir, "tokens.json"), tokens);
+  saveKind(kind, root);
   writeText(join(dir, "DESIGN.md"), [
     `# ${name}`, "",
     "## Goal", "", request.trim(), "",
@@ -51,7 +55,7 @@ export function initProject(root: string, request: string, opts: { name?: string
   for (const l of LEVELS) mkdirSync(join(dir, "components", l), { recursive: true });
 
   remember({ project: name, root, fonts: [tokens.font.heading, tokens.font.body, tokens.font.mono], accentHue: hueOf(tokens.color.accent), at: new Date().toISOString() });
-  return { dir, tokens, fonts };
+  return { dir, tokens, fonts, kind };
 }
 
 function hueOf(hex: string): number {

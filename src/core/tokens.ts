@@ -166,8 +166,11 @@ export function generateTokens(name: string, request: string, rules: Rule[], roo
   const floor = rule(rules, "color.contrast")?.min ?? 4.5;
   const bg = mood.dark ? hslToHex(hue, 12, 9) : hslToHex(hue, 20, 98);
   const accentL = mood.dark ? 62 : 44;
-  const accent = readable(hue, 68, accentL, [bg], 3, !mood.dark);
   const white = "#ffffff", ink = hslToHex(hue, 20, 10);
+  // away from the page also means more contrast for the text on the accent; some hues need a few steps for that
+  let accent = readable(hue, 68, accentL, [bg], 3, !mood.dark);
+  for (let l = accentL; Math.max(contrast(white, accent), contrast(ink, accent)) < floor && l > 0 && l < 100; )
+    accent = readable(hue, 68, (l += mood.dark ? 2 : -2), [bg], 3, !mood.dark);
   const surface = mood.dark ? hslToHex(hue, 12, 13) : hslToHex(hue, 16, 95);
   const color = {
     bg,
@@ -213,16 +216,17 @@ export function validateTokens(t: Tokens, rules: Rule[], where = ".gusteau/token
     const c = contrast(t.color[fg], t.color[bg]);
     if (c < floor) f(3, "color.contrast", `color.${fg} on color.${bg} is ${c.toFixed(2)}:1, under ${floor}:1`);
   }
+  // a rule left out (a terminal app has no tap targets) isn't checked
   const families = new Set([t.font.heading, t.font.body]).size;
-  if (families > (r("type.families")?.max ?? 2)) f(2, "type.families", `${families} font families`);
-  if (t.type.body < (r("type.body")?.min ?? 16)) f(2, "type.body", `body text is ${t.type.body}px`);
+  if (r("type.families") && families > (r("type.families")!.max ?? 2)) f(2, "type.families", `${families} font families`);
+  if (r("type.body") && t.type.body < (r("type.body")!.min ?? 16)) f(2, "type.body", `body text is ${t.type.body}px`);
   const lead = r("type.leading");
   if (lead && (t.type.leading < lead.min! || t.type.leading > lead.max!)) f(1, "type.leading", `body line height is ${t.type.leading}`);
   const step = r("spacing.grid")?.step;
   for (const s of t.space) if (step && s % step) f(1, "spacing.grid", `space ${s} is off the ${step}px grid`);
   const mo = r("motion.duration");
   for (const [k, v] of Object.entries(t.motion)) if (mo && typeof v === "number" && (v < mo.min! || v > mo.max!)) f(1, "motion.duration", `motion.${k} is ${v}ms`);
-  if (t.target < (r("touch.target")?.min ?? 44)) f(2, "touch.target", `tap target is ${t.target}px`);
+  if (r("touch.target") && t.target < (r("touch.target")!.min ?? 44)) f(2, "touch.target", `tap target is ${t.target}px`);
   return out;
 }
 

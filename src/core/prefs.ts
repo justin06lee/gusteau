@@ -1,4 +1,6 @@
 import { join } from "node:path";
+import { appliesTo, loadKind, type Kind } from "./kind";
+import { addRejection, type Rejection } from "./rejections";
 import { loadHistory } from "./tokens";
 import { globalHome, projectDir, readJson, readText, readYaml, shortId, writeYaml } from "./store";
 
@@ -6,7 +8,7 @@ export type Strength = "hard" | "strong" | "lean";
 export type Pref = {
   id: string; says: string; why?: string; instead?: string;
   scope: "global" | "project"; strength: Strength; tags?: string[];
-  source?: "review" | "decision" | "manual"; overrides?: string;
+  source?: "review" | "decision" | "manual"; overrides?: string; kinds?: Kind[];
 };
 
 const path = (scope: Pref["scope"], root?: string) => (scope === "global" ? join(globalHome(), "prefs.yaml") : join(projectDir(root), "prefs.yaml"));
@@ -21,10 +23,10 @@ export function addPref(p: Omit<Pref, "id"> & { id?: string }, root?: string): P
 
 const RANK: Record<Strength, number> = { hard: 3, strong: 2, lean: 1 };
 
-/** Task > project > global, except that a hard entry can only be overridden by another hard one. */
-export function effectivePrefs(root?: string): { global: Pref[]; project: Pref[] } {
-  const project = loadPrefs("project", root);
-  const global = loadPrefs("global").filter((g) => {
+/** Task > project > global, except that a hard entry can only be overridden by another hard one. Prefs for other kinds of project drop out. */
+export function effectivePrefs(root?: string, kind: Kind = loadKind(root)): { global: Pref[]; project: Pref[] } {
+  const project = loadPrefs("project", root).filter((p) => appliesTo(p, kind));
+  const global = loadPrefs("global").filter((g) => appliesTo(g, kind)).filter((g) => {
     const over = project.find((p) => p.overrides === g.id);
     return !over || (g.strength === "hard" && RANK[over.strength] < RANK.hard);
   });
@@ -77,15 +79,21 @@ export function parseReview(json: any): { item: string; verdict?: string; said: 
   }));
 }
 
-/** Turn a project's decisions and review replies into project prefs. */
+const REJECTED = /^(reject|rejected|declined|no)$/i;
+
+/** Turn a project's decisions and review replies into project prefs, and what the user turned down into rejections. */
 export function learnFromProject(root?: string, files = { decisions: "DECISIONS.md", review: "review.json" }) {
   const dir = projectDir(root);
   const added: Pref[] = [];
+  const rejected: Rejection[] = [];
   for (const d of parseDecisions(readText(join(dir, files.decisions)) ?? ""))
     if (d.status === "accepted")
       added.push(addPref({ id: d.id && "p-" + d.id, says: d.title, why: d.why, instead: d.instead, scope: "project", strength: "strong", source: "decision" }, root));
+    else if (REJECTED.test(d.status))
+      rejected.push(addRejection({ id: d.id && "r-" + d.id, tried: d.title, said: d.why, instead: d.instead, scope: "project", source: "decision" }, root));
   for (const r of parseReview(readJson(join(dir, files.review), {})))
-    for (const said of r.said)
+    if (REJECTED.test(r.verdict ?? "")) rejected.push(addRejection({ tried: r.item, said: r.said.join(" / ") || undefined, scope: "project", source: "review" }, root));
+    else for (const said of r.said)
       added.push(addPref({ says: said, scope: "project", strength: r.verdict === "change" ? "strong" : "lean", tags: [r.item], source: "review" }, root));
-  return added;
+  return Object.assign(added, { rejected });
 }

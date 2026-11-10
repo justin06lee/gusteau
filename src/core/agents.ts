@@ -7,6 +7,7 @@ Then \`gusteau taste <page>\` renders the page and measures it against the user'
 When a request names another company's or product's look, \`gusteau ref <name>\` returns its saved sheet;
 if there is none, research that design and save one with \`gusteau ref save <name> <file>\`
 (\`gusteau ref template\` prints the outline).
-When the user approves or corrects a design choice, record it with \`gusteau learn --says "..." --why "..."\`.
+When the user approves or corrects a design choice, record it with \`gusteau learn --says "..." --why "..."\`;
+when they turn something down, \`gusteau reject --tried "..." --said "..." --instead "..."\`.
 New reusable pieces go in the library: \`gusteau component add <name> --level atom|molecule|organism|template|page\`.
 `;

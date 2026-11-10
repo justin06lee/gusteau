@@ -15,7 +15,7 @@ export function loadComponents(root?: string): Component[] {
   return walk(dir(root)).filter((p) => p.endsWith(".md")).map((path) => {
     const { data, body } = frontMatter(readText(path)!);
     return { ...data, slug: data.slug ?? path.split("/").pop()!.replace(/\.md$/, ""), notes: body.trim(), path } as Component;
-  });
+  }).sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || a.slug.localeCompare(b.slug)); // readdir order differs by OS
 }
 
 export function addComponent(c: Omit<Component, "slug"> & { slug?: string }, root?: string): Component {

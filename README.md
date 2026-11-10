@@ -45,7 +45,9 @@ gusteau taste index.html
 
 `init` writes `.gusteau/` for the project: tokens (color, type, spacing, radius), a `DESIGN.md` with the goal and principles, a decision log and an empty library. Each project gets its own values. A new project doesn't reuse an earlier one's accent or fonts. Fonts are picked for what the request and your global preferences ask for ("calm", "editorial", "a bakery"), and the reason goes into `DESIGN.md` and a proposed decision you can accept or change. Asking for room ("spacious", "breathing room", a landing page) adds wider spacing steps (96, 128) and two larger type sizes. "A recipe box called Mise" names the project Mise; otherwise it takes the folder's name.
 
-`brief` prints what an agent should read before UI work: the goal, the rules, your preferences, the project's tokens and decisions, the library, and a few quick checks.
+Each project has a kind: `product` (the default, and what any project that never declared one is), `marketing` or `terminal`. `init` reads it from the request ("a TUI", "a landing page") or takes `--kind`; `gusteau kind terminal` changes it later. The kind decides which rules bend: a terminal app drops the web rules (body size, tap targets, font families, transitions, radius, the 4px grid), and a marketing page may use more color for atmosphere without `taste` calling it loud. A rule or preference can also list its own `kinds:`.
+
+`brief` prints what an agent should read before UI work. Your taste comes first, then this project's preferences, decisions, tokens and library, then what was tried and turned down, then the rules' limits in one line. Design basics an agent already knows stay in the primers.
 
 `check` scans the code for values that aren't tokens: colors (hex, `rgb()`/`hsl()`, named colors, Tailwind palette classes), sizes off the scale, and literals that copy a token instead of referencing it. It reads CSS, JS/TS/JSX/TSX, QML, HTML, Vue and Svelte. It also checks the component library for contradictions. Failures come out ranked by severity, with a suggested fix, and the command exits 1 until everything passes, so an agent can loop on it. A value chosen on purpose, like a brand logo's colors, is marked with a `gusteau-ignore` comment on its line (`gusteau-ignore-next-line`, `gusteau-ignore-start` … `gusteau-ignore-end` for a block, `gusteau-ignore-file` in the first lines for a whole file); the report counts the lines it skipped. Values in comments and `999px` pill radii aren't failures. It says how many files it read, and says so when a project has no code it can read. It ends by saying where each rule is checked: in code, only in `tokens.json`, on the rendered page by `taste`, or not at all. Passing `check` means the values are tokens, not that the page has taste.
 
@@ -81,11 +83,12 @@ It needs a Chromium for playwright-core: `bunx playwright install chromium`, or 
 ```sh
 gusteau learn --says "Hover changes value, never hue" --why "a hue shift reads as a different element" --strength hard
 gusteau learn --from-project
+gusteau reject --tried "Outlined pills" --said "too busy" --instead "ghost buttons"
 gusteau candidates
 gusteau promote <id>
 ```
 
-Each preference keeps what it says, why, what to do instead, its scope and its strength. `--from-project` reads the project's `review.json` and `DECISIONS.md`. A project preference that shows up in two or more projects becomes a candidate for your global taste, and it moves there only when you `promote` it.
+Each preference keeps what it says, why, what to do instead, its scope and its strength. A rejection is its own record (`rejections.yaml`, project or `--scope global`): what was tried, what you said, what was chosen instead and when. `--from-project` reads the project's `review.json` and `DECISIONS.md`; a decision with `Status: rejected` or a review item with verdict `reject` becomes a rejection. A project preference that shows up in two or more projects becomes a candidate for your global taste, and it moves there only when you `promote` it.
 
 ## References
 
@@ -115,7 +118,7 @@ Components follow atomic design: atom, molecule, organism, template, page. Each 
 gusteau primer ux
 ```
 
-Six short reminders: design elements, design principles, typography, color, layout and grids, UX. The brief carries only their quick checks; the full text is one command away.
+Six short reminders: design elements, design principles, typography, color, layout and grids, UX. The brief leaves them out; the full text is one command away.
 
 ## With an agent
 
@@ -131,10 +134,10 @@ Or run it as an MCP server over stdio:
 { "mcpServers": { "gusteau": { "command": "gusteau", "args": ["mcp"] } } }
 ```
 
-The MCP tools are `brief`, `check`, `taste`, `export`, `init`, `learn`, `ref_lookup`, `ref_template`, `ref_save`, `component_search`, `component_add` and `primer`.
+The MCP tools are `brief`, `check`, `taste`, `export`, `init`, `learn`, `reject`, `ref_lookup`, `ref_template`, `ref_save`, `component_search`, `component_add` and `primer`.
 
 ## Absence over prohibition
 
-gusteau steers by what it leaves out, not by what it forbids. The brief never names other projects, never lists the saved references, and never says "don't". A reference sheet comes back only when it is asked for by name. Each project's values are kept apart from earlier ones by the code that generates them, not by an instruction to the agent. An agent can't copy what it was never shown.
+gusteau steers by what it leaves out, not by what it forbids. The brief never names other projects, never lists the saved references, and never says "don't". The one record of a "no" is this project's and your global rejections, written as what happened (tried, said, went with) rather than as a rule. A reference sheet comes back only when it is asked for by name. Each project's values are kept apart from earlier ones by the code that generates them, not by an instruction to the agent. An agent can't copy what it was never shown.
 
 See [SPEC.md](SPEC.md) for the record formats and the details.

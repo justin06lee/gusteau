@@ -1,8 +1,9 @@
 import { join } from "node:path";
+import type { Kind } from "./kind";
 import { globalHome, readYaml, writeYaml } from "./store";
 
 /** A global constraint. Projects choose values inside it. */
-export type Rule = { id: string; says: string; min?: number; max?: number; step?: number };
+export type Rule = { id: string; says: string; min?: number; max?: number; step?: number; kinds?: Kind[] };
 
 export const DEFAULT_RULES: Rule[] = [
   { id: "values.tokens", says: "Every size and color in code comes from the tokens" },
